@@ -24,12 +24,18 @@ class COCOFlickrDataset(Dataset):
 
     def get_img_path(self, idx):
         if self.is_flickr:
-            return f"{self.image_dir_path}/{self.annotations[idx]['image_id']}.jpg"
+            return os.path.join(
+                self.image_dir_path, self.annotations[idx]["image_id"] + ".jpg"
+            )
         else:
-            return f"{self.image_dir_path}/{self.annotations[idx]['image_id']:012d}.jpg"
+            return os.path.join(
+                self.image_dir_path,
+                f"COCO_train2017_{self.annotations[idx]['image_id']:012d}.jpg",
+            )
 
     def __getitem__(self, idx):
         image = Image.open(self.get_img_path(idx))
+        image.load()
         caption = self.annotations[idx]["caption"]
         return {
             "image": image,
@@ -71,6 +77,7 @@ class VQADataset(Dataset):
         answers = self.answers[idx]
         img_path = self.get_img_path(question)
         image = Image.open(img_path)
+        image.load()
         return {
             "image": image,
             "question": question["question"],
