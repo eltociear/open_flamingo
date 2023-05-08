@@ -643,7 +643,6 @@ def evaluate_imagenet(
         ] + [eval_model.image_processor(batch["image"]).unsqueeze(0)]
         vision_x = torch.cat(vision_x, dim=0)
         vision_x = vision_x.unsqueeze(1).unsqueeze(0)
-        model._encode_vision_x(vision_x.cuda())
 
         context_class_names = [
             in_context_samples[i]["class_name"] for i in range(effective_num_shots)
@@ -652,30 +651,35 @@ def evaluate_imagenet(
             f"{prompt_text} {classname}<|endofchunk|>"
             for classname in context_class_names
         )
+        # add in the <image> token for the target class
+        context_text += prompt_text
+
+        # TODO: Irena: need to pass in input_ids here because we save where the <image> tokens are in the context
+        # This just needs to be text that includes all <image> tokens in the full prompt
+        model.cache_media(input_ids=tokenizer(context_text, return_tensors='pt')['input_ids'], vision_x=vision_x.cuda())
 
         # TODO(jpgard): cache the context text here, and compute the outputs
         #  one token at a time by using Flamingo.forward() with
         #  past_key_values and use_cache parameters.
 
         overall_probs = []
-        for imagenet_class_name in tqdm(openai_imagenet_classnames):
-            target_text = f"{prompt_text} {imagenet_class_name}"
+        for imagenet_class_name in tqdm(openai_imagenet_classnames): # Irena: I think this can be parallelized
+            target_text = f"{context_text} {imagenet_class_name}" # context_text includes prompt_text
             prompt_tokens = (
                 tokenizer(prompt_text, add_special_tokens=False, return_tensors="np")[
                     "input_ids"
                 ]
                 .ravel()
                 .tolist()
-            )
+            ) # Irena: isn't this computation being duplicated across batches x classes?
 
-            lang_x = tokenizer([context_text + target_text], return_tensors="pt")
+            lang_x = tokenizer([target_text], return_tensors="pt")
 
             outputs = model(
                 vision_x=None,
                 lang_x=lang_x["input_ids"].cuda(),
                 attention_mask=lang_x["attention_mask"].cuda(),
                 clear_conditioned_layers=False,
-                use_cached_vision_x=True,
             )
             probs = torch.softmax(outputs.logits, dim=-1).detach()
             # collect the probability of the generated token -- probability
@@ -692,6 +696,9 @@ def evaluate_imagenet(
                 input_probs = input_probs[idxes[-1] + 1 :]
                 probs.append(torch.prod(input_probs).item())
             overall_probs.append(probs)
+        
+        # Irena: need to explicitly uncache the media because we manage an internal flag
+        model.uncache_media()
 
         top5 = [
             IMAGENET_1K_CLASS_ID_TO_LABEL[pred]
