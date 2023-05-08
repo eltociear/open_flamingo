@@ -103,7 +103,7 @@ class FlamingoLMMixin(nn.Module):
         )
         self.media_token_id = media_token_id
         self.initialized_flamingo = True
-        self._generating = False
+        self._use_cached_vision_x = False
 
     def forward(self, *input, **kwargs):
         """Condition the Flamingo layers on the media locations before forward()"""
@@ -114,16 +114,18 @@ class FlamingoLMMixin(nn.Module):
 
         input_ids = kwargs["input_ids"] if "input_ids" in kwargs else input[0]
         media_locations = input_ids == self.media_token_id
-        
-        # if there are media already cached and we're generating and there are no media tokens in the input, 
-        # we'll assume that ALL input tokens should attend to the last previous media that is cached. 
+
+        # if there are media already cached and we're generating and there are no media tokens in the input,
+        # we'll assume that ALL input tokens should attend to the last previous media that is cached.
         # this is especially important for HF generate() compatibility,
         # which calls forward() repeatedly one token at a time (with no media tokens)
-        # TODO: refactor this out of flamingo_lm and into flamingo? so that it mirrors vis_x
-        use_cached_media_locations = self._generating and self.is_conditioned() and not media_locations.any()
+        use_cached_media_locations = (
+            self._use_cached_vision_x
+            and self.is_conditioned()
+            and not media_locations.any()
+        )
 
-        for layer in self.get_decoder().layers:
-            if not use_cached_media_locations: layer.condition_media_locations(media_locations)
+        for layer in self._get_decoder_layers():
             layer.condition_use_cached_media(use_cached_media_locations)
 
         return super().forward(
