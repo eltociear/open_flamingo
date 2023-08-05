@@ -120,7 +120,6 @@ for ds in [
     "flickr30",
     "hateful_memes",
     "waterbirds",
-    "celebA",
 ]:
     parser.add_argument(
         f"--eval_{ds}",
@@ -342,8 +341,6 @@ parser.add_argument(
     type=str,
     default=".",
 )
-parser.add_argument("--wilds_split_scheme", type=str, choices=["ID", "OOD"])
-
 
 def main():
     args, leftovers = parser.parse_known_args()
@@ -1173,6 +1170,17 @@ def evaluate_classification(
         )
         all_class_names = HM_CLASSNAMES
         k = 1
+    elif dataset_name in ("waterbirds",): # subpopulation shift datasets
+        train_dataset = WILDSDataset(
+            dataset_name=dataset_name,
+            split="train",
+            root_dir=args.wilds_root_dir,
+        )
+        test_dataset = WILDSDataset(
+            dataset_name=dataset_name,
+            split="test",
+            root_dir=args.wilds_root_dir,
+        )
     else:
         raise ValueError(f"Unsupported dataset {dataset_name}")
 
@@ -1300,7 +1308,7 @@ def evaluate_classification(
             for pred in all_predictions
         ]
         return roc_auc_score(gts, pred_scores)
-    elif dataset_name in ("waterbirds", "celebA"):
+    elif dataset_name in ("waterbirds",):
         # return avg and worst group accuracies
         y_pred = [pred["pred_class_id"] for pred in all_predictions]
         y_true = [pred["gt_id"] for pred in all_predictions]

@@ -5,7 +5,7 @@ from PIL import Image
 from torch.utils.data import Dataset
 from torchvision.datasets import ImageFolder
 
-from open_flamingo.eval.classification_utils import IMAGENET_CLASSNAMES
+from open_flamingo.eval.classification_utils import IMAGENET_CLASSNAMES, WATERBIRDS_CLASSNAMES
 
 
 class CaptionDataset(Dataset):
@@ -157,7 +157,7 @@ class HatefulMemesDataset(Dataset):
         }
 
 class WILDSDataset(Dataset):
-    def __init__(self, dataset_name, split, root_dir):
+    def __init__(self, dataset_name: str, split: str, groupby_fields: [str], root_dir: str):
         import wilds
         self.full_dataset = wilds.get_dataset(
             dataset_name,
@@ -169,13 +169,7 @@ class WILDSDataset(Dataset):
             self.class_id_to_name = {i: s for i, s in enumerate(WATERBIRDS_CLASSNAMES)}
             self.grouper = wilds.common.grouper.CombinatorialGrouper(
                 dataset=self.full_dataset,
-                groupby_fields=["background"],
-            )
-        elif dataset_name == "celebA":
-            self.class_id_to_name = {i: s for i, s in enumerate(CELEBA_CLASSNAMES)}
-            self.grouper = wilds.common.grouper.CombinatorialGrouper(
-                dataset=self.full_dataset,
-                groupby_fields=["Male"],
+                groupby_fields=['background'],
             )
         else:
             raise Exception(f"Unimplemented WILDS dataset {dataset_name}")
